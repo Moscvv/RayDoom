@@ -1,0 +1,10 @@
+- Format: PNG with transparency
+- Color Depth: 32-bit RGBA
+- Orientation: Facing right (+X direction in your 3D space)
+- Sprite Sheet Layout:
+  * Idle: 4 frames (512x512 each)
+  * Run: 8 frames (512x512 each)  
+  * Attack: 6 frames (768x768 each)
+- Naming Convention:
+  `character_{state}_{frame}.png` 
+  Example: `character_attack_03.png`
