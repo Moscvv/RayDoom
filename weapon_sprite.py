@@ -158,7 +158,7 @@ class WeaponSprite:
                     self.frame_time = 0
                     old_frame = self.current_frame
                     self.current_frame = (self.current_frame + 1) % frame_count if anim['loop'] else min(self.current_frame + 1, frame_count - 1)
-                    print(f"Animation {self.current_animation}: frame changed from {old_frame} to {self.current_frame}")
+                    #print(f"Animation {self.current_animation}: frame changed from {old_frame} to {self.current_frame}")
                     
                     # If attack animation is done, return to idle
                     if self.current_animation == 'attack' and self.current_frame >= frame_count - 1 and not anim['loop']:
@@ -174,20 +174,20 @@ class WeaponSprite:
 
     def draw(self):
         if not self.is_visible:
-            print("Weapon not visible, skipping draw")
+           # print("Weapon not visible, skipping draw")
             return
             
         if self.current_animation not in self.animations:
-            print(f"Animation {self.current_animation} not in loaded animations, skipping draw")
+            #print(f"Animation {self.current_animation} not in loaded animations, skipping draw")
             return
             
         anim = self.animations[self.current_animation]
         if not anim['frames']:
-            print(f"No frames in animation {self.current_animation}, skipping draw")
+            #print(f"No frames in animation {self.current_animation}, skipping draw")
             return
             
         if self.current_frame >= len(anim['frames']):
-            print(f"Frame index {self.current_frame} out of bounds for animation {self.current_animation} with {len(anim['frames'])} frames")
+            #print(f"Frame index {self.current_frame} out of bounds for animation {self.current_animation} with {len(anim['frames'])} frames")
             return
             
         # Debug info

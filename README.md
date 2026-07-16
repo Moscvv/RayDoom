@@ -12,6 +12,12 @@ This is a learning project, not a finished game. Expect bugs, missing features, 
 
 - **Collision detection is bugged.** The current implementation in `collision_handler.py` doesn't reliably resolve player-vs-wall collisions in all cases — you may clip through geometry or get stuck on edges. This is the top priority fix.
 - Other systems (sprites, weapons, UI) are functional but not fully polished.
+- **Stairs (portal floor-height transitions) partially fixed (WIP):**
+  - Fixed: a scheduled camera-height adjustment that was set but never applied (`apply_height_adjust` now exists in `camera.py`).
+  - Fixed: the height adjustment re-triggering every frame instead of once per crossing.
+  - Fixed: `Player.move()` and `Camera.move()` both independently running collision/movement each frame, causing duplicate checks — `Camera.move()` is now disabled, `Player` owns horizontal movement.
+  - Still broken: `_get_player_current_sector()` / `_point_in_sector()` in `collision_handler.py` is a placeholder that always returns `True`, so it can't reliably tell which side of a portal the player is on. A local cross-product side-test (`_is_entering_back`) works for isolated single steps but breaks down in tighter areas with multiple nearby segments.
+  - Next step: replace sector detection with proper point-location via the BSP tree in `bsp/`, instead of the per-segment side-test.
 
 ### What's added on top of the original tutorial
 

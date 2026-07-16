@@ -27,7 +27,8 @@ class Camera:
         self.impact_amount = 0.0
         self.impact_velocity = 0.0  # velocity for smoother motion
         self.impact_gravity = 15.0  # Gravity constant to pull camera back down
-        self.base_height = 0.0      # original height
+        self.base_height = 0.0      
+        self.scheduled_height_adjust = 0.0
 
     def set_yaw(self):
         delta_yaw = -get_mouse_delta().x * self.rot_speed
@@ -84,8 +85,8 @@ class Camera:
             self.pos_3d.y = self.base_height
             self.target.y += y_correction
             self.impact_velocity = 0.0  # Stop velocity
-
-        self.move()
+    
+        self.apply_height_adjust()
 
     def update_vectors(self):
         self.forward = self.get_forward()
@@ -155,7 +156,15 @@ class Camera:
 
     def move_z(self, dz):
         self.pos_3d.z += dz
-        self.target.z += dz  
+        self.target.z += dz 
+
+    def apply_height_adjust(self):
+        if self.scheduled_height_adjust:
+            self.pos_3d.y += self.scheduled_height_adjust
+            self.target.y += self.scheduled_height_adjust
+            self.base_height += self.scheduled_height_adjust 
+            print(f"applied height adjust, new pos_3d.y={self.pos_3d.y}, new base_height={self.base_height}")
+            self.scheduled_height_adjust = 0.0
 
     def update_pos_2d(self):
         #2d postion on xz plane

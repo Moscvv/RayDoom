@@ -1,11 +1,13 @@
 from settings import *
 from data_types import Segment
+from utils import *
 
 class CollisionHandler:
     def __init__(self, engine):
         self.engine = engine
         self.player_radius = 0.3  # adjust based on scale
-        self.debug_mode = False   # Set to True to print debugging info
+        self.debug_mode = True   # Set to True/Flase to print(not print) debugging info
+        self.last_adjusted_segment = None
 
     def check_collision(self, new_pos_2d):
         # // Check if the new position would cause a collision with any wall ///
@@ -19,11 +21,27 @@ class CollisionHandler:
     def check_segment_collision(self, segment: Segment, new_pos_2d):
         # First check if we're even near this wall segment
         if not self._is_close_to_segment(segment, new_pos_2d):
+           #free to trigger again later on?
+            if segment is self.last_adjusted_segment:
+                self.last_adjusted_segment = None
             return False
-            
-        # If this is a portal, check if player can pass through
-        if segment.back_sector_id is not None:
-            # Get sector information
+        
+        if segment.back_sector_id is None:
+            #solid wall
+            return self._check_wall_collision(segment, new_pos_2d)
+        
+        # portal
+        passable, floor_diff = self._is_portal_passable(segment, new_pos_2d)
+
+        if passable:
+            if self._check_wall_collision(segment, new_pos_2d):
+                self._maybe_schedule_height_adjust(segment, new_pos_2d, floor_diff)
+            return False # allow passage
+        
+        return self._check_wall_collision(segment, new_pos_2d)
+             
+    
+    def _is_portal_passable(self, segment, new_pos_2d):
             front_sector = self.engine.level_data.sectors[segment.sector_id]
             back_sector = self.engine.level_data.sectors[segment.back_sector_id]
             
@@ -31,23 +49,18 @@ class CollisionHandler:
             player_feet_y = self.engine.camera.pos_3d.y
             player_height = CAM_HEIGHT
             player_head_y = player_feet_y + player_height
-            player_eye_level = player_feet_y + player_height * 0.85  # Approximate eye level
             
-            # Determine which sector the player is currently in
             # This helps determine which way we're trying to cross the portal
-            current_sector_id = self._get_player_current_sector()
-            is_entering_back = (current_sector_id == segment.sector_id)
+            is_entering_back = self._is_entering_back(segment, new_pos_2d)
             
             # Get the sector we're trying to enter
             target_sector = back_sector if is_entering_back else front_sector
             current_sector = front_sector if is_entering_back else back_sector
             
-            # Max height the player can step up
-            max_step_height = 0.5
-            
-            # Check portal passability
-            passable = True
-            
+
+            max_step_height = 0.5  # Max height the player can step up
+            passable = True    # Check portal passability
+
             # Check if the floor is too high to step up
             floor_diff = target_sector.floor_h - current_sector.floor_h
             if floor_diff > max_step_height:
@@ -67,26 +80,25 @@ class CollisionHandler:
                 if self.debug_mode:
                     print(f"Portal opening too small: {portal_height} < {player_height}")
                 passable = False
+
+            return passable, floor_diff
+       
+
+    def _maybe_schedule_height_adjust(self, segment, new_pos_2d, floor_diff):  
+        _, dist_to_wall = closest_point_on_segment(*segment.pos, new_pos_2d)
+        if dist_to_wall <0.05:
+
+        # If we're very close to a passable portal with a different floor height,
+        # adjust the player's height to match the new floor
+                        
+            if abs(floor_diff) > 0.05:  # Only adjust if there's a significant difference
+                # Schedule a height adjustment for the next frame
+                if segment is not self.last_adjusted_segment:
+                    if self.debug_mode:
+                         print(f"SETTING height adjust: {floor_diff}")
+                    self.engine.camera.scheduled_height_adjust = floor_diff
+                    self.last_adjusted_segment = segment
             
-            # For passable portals, we still need to check if we're colliding with the wall
-            if passable:
-                # Check if we're actually colliding with the wall segment
-                if self._check_wall_collision(segment, new_pos_2d):
-                    # Automatically adjust player height when passing through portals with different floor heights
-                    if is_close_to_segment(segment, new_pos_2d, threshold=0.05):  # Extra close check for transition
-                        # If we're very close to a passable portal with a different floor height,
-                        # adjust the player's height to match the new floor
-                        if abs(floor_diff) > 0.05:  # Only adjust if there's a significant difference
-                            # Schedule a height adjustment for the next frame
-                            self.engine.camera.scheduled_height_adjust = floor_diff
-                    return False  # No collision, allow passage
-            
-            # For impassable portals, treat as a wall
-            if not passable:
-                return self._check_wall_collision(segment, new_pos_2d)
-        
-        # For solid walls
-        return self._check_wall_collision(segment, new_pos_2d)
     
     def _is_close_to_segment(self, segment, pos, threshold=1.0):
         """Quick check to see if a position is close enough to a segment to bother with collision"""
@@ -99,6 +111,15 @@ class CollisionHandler:
         
         # Check if position is within bounding box
         return (min_x <= pos.x <= max_x) and (min_y <= pos.y <= max_y)
+    
+    def _is_entering_back(self, segment, pos):
+        """Which side of this segment's line is 'pos' on - front or back?"""
+        p0, p1 = segment.pos
+        wall_vec = p1 - p0
+        to_pos = pos - p0
+        cross = wall_vec.x * to_pos.y - wall_vec.y * to_pos.x
+        print(f"cross={cross}")
+        return cross > 0
     
     def _get_player_current_sector(self):
         """Determine which sector the player is currently in"""
@@ -131,31 +152,9 @@ class CollisionHandler:
     def _check_wall_collision(self, segment, new_pos_2d):
         # Helper method to check actual wall collision geometry
         p0, p1 = segment.pos
-
-        # Vector from p0 to p1
-        wall_vec = p1 - p0
-        wall_length = length(wall_vec)
-        wall_dir = wall_vec / wall_length
-
-        # Vector from wall start to player position
-        to_player = new_pos_2d - p0
-
-        # Project player position onto the wall line
-        proj_length = dot(to_player, wall_dir)
-
-        # Closest point on the wall line to the player
-        if proj_length < 0:
-            closest = p0
-        elif proj_length > wall_length:
-            closest = p1
-        else:
-            closest = p0 + wall_dir * proj_length
-
-        # Distance from player to the closest point on the wall
-        dist = length(new_pos_2d - closest)
-
-        # Collision if distance is less than player radius
+        _, dist = closest_point_on_segment(p0, p1, new_pos_2d)
         return dist < self.player_radius
+
 
     def get_slide_position(self, current_pos, desired_pos):
         # /// If collision detected, calculate a sliding position /// 
@@ -177,32 +176,5 @@ class CollisionHandler:
         # No collision, accept the move
         return desired_pos
         
-# Helper function for extra close proximity check
-def is_close_to_segment(segment, pos, threshold=0.05):
-    p0, p1 = segment.pos
     
-    # Vector from p0 to p1
-    wall_vec = p1 - p0
-    wall_length = length(wall_vec)
-    wall_dir = wall_vec / wall_length
-    
-    # Vector from wall start to player position
-    to_player = pos - p0
-    
-    # Project player position onto the wall line
-    proj_length = dot(to_player, wall_dir)
-    
-    # Closest point on the wall line to the player
-    if proj_length < 0:
-        closest = p0
-    elif proj_length > wall_length:
-        closest = p1
-    else:
-        closest = p0 + wall_dir * proj_length
-    
-    # Distance from player to the closest point on the wall
-    dist = length(pos - closest)
-    
-    # Return true if very close
-    return dist < threshold
-                          
+   
